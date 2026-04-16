@@ -36,6 +36,35 @@ from models import ClientDisconnectedError, QuotaExceededError
 logger = logging.getLogger("AIStudioProxyServer")
 
 
+async def dismiss_temporary_chat_drive_dialog_after_response(
+    page: AsyncPage,
+    req_id: str,
+    max_checks: int = 5,
+    check_interval_seconds: float = 0.25,
+) -> bool:
+    """在响应完成后短暂轮询 Temporary chat 弹窗，并优先点击取消。"""
+    try:
+        from browser_utils.initialization import handle_temporary_chat_drive_dialog
+
+        for attempt_index in range(max_checks):
+            if await handle_temporary_chat_drive_dialog(page):
+                logger.info(
+                    f"[{req_id}] [UI] Temporary chat Google Drive dialog dismissed after response completion"
+                )
+                return True
+
+            if attempt_index < max_checks - 1:
+                await asyncio.sleep(check_interval_seconds)
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.debug(
+            f"[{req_id}] [UI] Post-response Temporary chat dialog check skipped: {e}"
+        )
+
+    return False
+
+
 async def check_quota_limit(page: AsyncPage, req_id: str) -> None:
     """Check for blocking quota errors immediately."""
     # 1. Check Global State first
@@ -1238,6 +1267,9 @@ async def _wait_for_response_completion(
                     logger.info(
                         f"[{req_id}] (WaitV3) ✅ Response complete: Input empty, submit disabled, edit button visible."
                     )
+                    await dismiss_temporary_chat_drive_dialog_after_response(
+                        page, req_id
+                    )
                     return True
             except TimeoutError:
                 if DEBUG_LOGS_ENABLED:
@@ -1257,6 +1289,7 @@ async def _wait_for_response_completion(
                 logger.warning(
                     f"[{req_id}] (WaitV3) Response might be complete (heuristic): Input empty, submit disabled, but edit button still hasn't appeared after {consecutive_empty_input_submit_disabled_count} checks. Assuming complete."
                 )
+                await dismiss_temporary_chat_drive_dialog_after_response(page, req_id)
                 return True
         else:
             consecutive_empty_input_submit_disabled_count = 0

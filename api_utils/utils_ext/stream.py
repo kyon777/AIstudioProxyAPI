@@ -173,6 +173,14 @@ async def use_stream_response(
                     break
 
                 if isinstance(data, dict) and data.get("done") is True:
+                    if page:
+                        from browser_utils.operations import (
+                            dismiss_temporary_chat_drive_dialog_after_response,
+                        )
+
+                        await dismiss_temporary_chat_drive_dialog_after_response(
+                            page, req_id
+                        )
                     logger.info(f"[{req_id}] ✅ Explicit DONE received.")
                     yield data
                     break
@@ -341,6 +349,15 @@ async def use_stream_response(
                         if dom_text and not accumulated_body:
                             parsed_data["body"] = dom_text
                             accumulated_body = dom_text
+
+                    if parsed_data.get("done") is True and page:
+                        from browser_utils.operations import (
+                            dismiss_temporary_chat_drive_dialog_after_response,
+                        )
+
+                        await dismiss_temporary_chat_drive_dialog_after_response(
+                            page, req_id
+                        )
 
                     yield parsed_data
                     if parsed_data.get("done") is True:
