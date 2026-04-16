@@ -562,7 +562,7 @@ async def signal_camoufox_shutdown() -> None:  # pragma: no cover
 
 
 async def handle_temporary_chat_drive_dialog(page: AsyncPage) -> bool:
-    """Dismiss the Google Drive recommendation dialog shown by Temporary chat."""
+    """Handle AI Studio recommendation dialogs that may block follow-up requests."""
     try:
         overlay_container = page.locator(CDK_OVERLAY_CONTAINER_SELECTOR)
         if await overlay_container.count() == 0:
@@ -576,34 +576,61 @@ async def handle_temporary_chat_drive_dialog(page: AsyncPage) -> bool:
         except Exception:
             dialog_text = ""
 
-        dialog_keywords = (
-            "google drive",
-            "temporary chat",
-            "save your conversations",
-        )
-        if dialog_text and not any(keyword in dialog_text for keyword in dialog_keywords):
-            return False
-
-        cancel_selectors = [
-            "button:has-text('Cancel and use Temporary chat')",
-            "button[aria-label='Cancel and use Temporary chat']",
+        dialog_profiles = [
+            {
+                "name": "temporary_chat_drive",
+                "keywords": (
+                    "google drive",
+                    "temporary chat",
+                    "save your conversations",
+                ),
+                "button_selectors": [
+                    "button:has-text('Cancel and use Temporary chat')",
+                    "button[aria-label='Cancel and use Temporary chat']",
+                ],
+                "success_log": "[UI] Dismissed Google Drive recommendation dialog for Temporary chat",
+            },
+            {
+                "name": "robotics_acknowledge",
+                "keywords": (
+                    "robotics model",
+                    "start using robotics model",
+                    "robotics models",
+                    "api additional terms",
+                ),
+                "button_selectors": [
+                    "button:has-text('Acknowledge')",
+                    "button[aria-label='Acknowledge']",
+                ],
+                "success_log": "[UI] Acknowledged Robotics model reminder dialog",
+            },
         ]
-        for selector in cancel_selectors:
-            try:
-                cancel_button = overlay_container.locator(selector)
-                if await cancel_button.count() > 0 and await cancel_button.first.is_visible(
-                    timeout=500
-                ):
-                    await cancel_button.first.click(timeout=3000)
-                    logger.info(
-                        "[UI] Dismissed Google Drive recommendation dialog for Temporary chat"
-                    )
-                    await asyncio.sleep(0.3)
-                    return True
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                continue
+
+        matched_profiles = dialog_profiles
+        if dialog_text:
+            matched_profiles = [
+                profile
+                for profile in dialog_profiles
+                if any(keyword in dialog_text for keyword in profile["keywords"])
+            ]
+            if not matched_profiles:
+                return False
+
+        for profile in matched_profiles:
+            for selector in profile["button_selectors"]:
+                try:
+                    action_button = overlay_container.locator(selector)
+                    if await action_button.count() > 0 and await action_button.first.is_visible(
+                        timeout=500
+                    ):
+                        await action_button.first.click(timeout=3000)
+                        logger.info(profile["success_log"])
+                        await asyncio.sleep(0.3)
+                        return True
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    continue
 
         return False
     except asyncio.CancelledError:
