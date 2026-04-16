@@ -22,6 +22,7 @@ from playwright.async_api import (
 
 from config import (
     AI_STUDIO_URL_PATTERN,
+    CDK_OVERLAY_CONTAINER_SELECTOR,
     INPUT_SELECTOR,
     MODEL_NAME_SELECTOR,
     USER_INPUT_END_MARKER_SERVER,
@@ -560,6 +561,58 @@ async def signal_camoufox_shutdown() -> None:  # pragma: no cover
         )
 
 
+async def handle_temporary_chat_drive_dialog(page: AsyncPage) -> bool:
+    """Dismiss the Google Drive recommendation dialog shown by Temporary chat."""
+    try:
+        overlay_container = page.locator(CDK_OVERLAY_CONTAINER_SELECTOR)
+        if await overlay_container.count() == 0:
+            return False
+
+        dialog_text = ""
+        try:
+            dialog_text = (
+                (await overlay_container.first.inner_text(timeout=1500)) or ""
+            ).lower()
+        except Exception:
+            dialog_text = ""
+
+        dialog_keywords = (
+            "google drive",
+            "temporary chat",
+            "save your conversations",
+        )
+        if dialog_text and not any(keyword in dialog_text for keyword in dialog_keywords):
+            return False
+
+        cancel_selectors = [
+            "button:has-text('Cancel and use Temporary chat')",
+            "button[aria-label='Cancel and use Temporary chat']",
+        ]
+        for selector in cancel_selectors:
+            try:
+                cancel_button = overlay_container.locator(selector)
+                if await cancel_button.count() > 0 and await cancel_button.first.is_visible(
+                    timeout=500
+                ):
+                    await cancel_button.first.click(timeout=3000)
+                    logger.info(
+                        "[UI] Dismissed Google Drive recommendation dialog for Temporary chat"
+                    )
+                    await asyncio.sleep(0.3)
+                    return True
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                continue
+
+        return False
+    except asyncio.CancelledError:
+        raise
+    except Exception as e:
+        logger.debug(f"[UI] Temporary chat dialog check skipped: {e}")
+        return False
+
+
 async def enable_temporary_chat_mode(page: AsyncPage) -> None:  # pragma: no cover
     """
     Check and enable "Temporary chat" mode in the AI Studio interface.
@@ -578,7 +631,9 @@ async def enable_temporary_chat_mode(page: AsyncPage) -> None:  # pragma: no cov
             logger.debug("[UI] Temporary chat mode already active")
         else:
             await incognito_button_locator.click(timeout=5000, force=True)
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.3)
+            await handle_temporary_chat_drive_dialog(page)
+            await asyncio.sleep(0.7)
 
             updated_classes = await incognito_button_locator.get_attribute("class")
             if updated_classes and "ms-button-active" in updated_classes:

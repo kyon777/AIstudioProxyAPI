@@ -4,6 +4,7 @@ from .core import (
 )
 from .core import (
     enable_temporary_chat_mode,
+    handle_temporary_chat_drive_dialog,
     signal_camoufox_shutdown,
 )
 from .core import (
@@ -15,4 +16,5 @@ __all__ = [
     "_close_page_logic",
     "signal_camoufox_shutdown",
     "enable_temporary_chat_mode",
+    "handle_temporary_chat_drive_dialog",
 ]

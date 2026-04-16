@@ -4,6 +4,7 @@ from typing import Callable, List
 from playwright.async_api import TimeoutError
 from playwright.async_api import expect as expect_async
 
+from browser_utils.initialization import handle_temporary_chat_drive_dialog
 from browser_utils.operations import save_error_snapshot
 from config import (
     CDK_OVERLAY_CONTAINER_SELECTOR,
@@ -297,6 +298,9 @@ class InputController(BaseController):
         try:
             overlay_container = self.page.locator(CDK_OVERLAY_CONTAINER_SELECTOR)
             if await overlay_container.count() == 0:
+                return
+
+            if await handle_temporary_chat_drive_dialog(self.page):
                 return
 
             # Candidate agreement button texts
